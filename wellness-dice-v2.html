@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wellness Dice</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #f5f4f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    .app { text-align: center; width: 100%; max-width: 640px; }
+    .app-title { font-family: 'Playfair Display', serif; font-size: 30px; font-weight: 700; color: #1a1a1a; margin-bottom: .2rem; }
+    .app-sub { font-size: 14px; color: #888; margin-bottom: .3rem; }
+    .lock-hint { font-size: 11px; color: #aaa; font-style: italic; margin-bottom: 1.2rem; }
+
+    .timer-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 1.4rem; flex-wrap: wrap; }
+    .timer-btn { font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500; padding: 5px 13px; border-radius: 20px; border: 1px solid #ccc; background: #fff; color: #666; cursor: pointer; transition: all .15s; }
+    .timer-btn:hover { background: #f0eeea; }
+    .timer-btn.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+    .timer-display { font-size: 22px; font-weight: 500; color: #1a1a1a; min-width: 52px; font-variant-numeric: tabular-nums; transition: color .3s; }
+    .timer-display.urgent { color: #d63030; }
+    .timer-ctrl { font-size: 18px; background: none; border: none; cursor: pointer; color: #888; padding: 2px 4px; line-height: 1; }
+    .timer-ctrl:hover { color: #1a1a1a; }
+
+    @keyframes flashRed {
+      0%, 100% { background: #f5f4f0; }
+      50% { background: #f7d0d0; }
+    }
+    @keyframes vibrate {
+      0%,100% { transform: translate(0,0); }
+      10% { transform: translate(-6px,0); }
+      20% { transform: translate(6px,0); }
+      30% { transform: translate(-5px,0); }
+      40% { transform: translate(5px,0); }
+      50% { transform: translate(-4px,0); }
+      60% { transform: translate(4px,0); }
+      70% { transform: translate(-3px,0); }
+      80% { transform: translate(3px,0); }
+      90% { transform: translate(-1px,0); }
+    }
+    body.flashing { animation: flashRed .6s ease-in-out infinite; }
+    body.vibrating { animation: vibrate .06s linear; }
+
+    .dice-grid { display: flex; justify-content: center; gap: 1.2rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+
+    .die-card { background: #fff; border: 2px solid #e8e6e0; border-radius: 16px; padding: 1rem .8rem; width: 155px; height: 205px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; position: relative; overflow: hidden; cursor: pointer; transition: border-color .2s, opacity .2s, transform .15s; user-select: none; }
+    .die-card:hover { transform: translateY(-2px); }
+    .die-card.locked { border-color: #F0A500; opacity: .78; }
+
+    .die-label { font-size: 10px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #aaa; position: absolute; top: 12px; }
+    .lock-icon { position: absolute; top: 9px; right: 9px; font-size: 14px; color: #F0A500; opacity: 0; transition: opacity .2s; }
+    .die-card.locked .lock-icon { opacity: 1; }
+
+    .die-face { width: 86px; height: 86px; border-radius: 16px; display: flex; align-items: center; justify-content: center; padding: 8px; position: relative; }
+    .die-face.context { background: #E8F4FD; }
+    .die-face.time    { background: #FEF3E2; }
+    .die-face.result  { background: #EDF7ED; }
+
+    .die-face-text { font-size: 11.5px; font-weight: 500; text-align: center; line-height: 1.25; opacity: 0; transition: opacity .3s; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 8px; }
+    .die-face.context .die-face-text { color: #1565A8; }
+    .die-face.time    .die-face-text { color: #A85A15; }
+    .die-face.result  .die-face-text { color: #1A6B1A; }
+
+    .die-illustration { opacity: 0; transition: opacity .3s; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+    .die-dots { position: absolute; inset: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 5px; padding: 13px; opacity: 1; transition: opacity .3s; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .die-face.context .dot { background: #4A9FD4; }
+    .die-face.time    .dot { background: #D4884A; }
+    .die-face.result  .dot { background: #4AB54A; }
+
+    .die-card.revealed .die-dots       { opacity: 0; }
+    .die-card.revealed .die-face-text  { opacity: 1; }
+    .die-card.revealed .die-illustration { opacity: 1; }
+
+    .die-category { font-size: 11px; font-weight: 500; color: #555; position: absolute; bottom: 12px; opacity: 0; transition: opacity .3s; }
+    .die-card.revealed .die-category { opacity: 1; }
+    .locked-label { position: absolute; bottom: 12px; font-size: 10px; font-weight: 500; color: #F0A500; opacity: 0; transition: opacity .2s; letter-spacing: .05em; text-transform: uppercase; }
+    .die-card.locked .die-category  { opacity: 0; }
+    .die-card.locked .locked-label  { opacity: 1; }
+
+    @keyframes shake {
+      0%   { transform: translate(0,0) rotate(0deg); }
+      20%  { transform: translate(-4px,2px) rotate(-3deg); }
+      40%  { transform: translate(4px,-2px) rotate(3deg); }
+      60%  { transform: translate(-3px,3px) rotate(-2deg); }
+      80%  { transform: translate(3px,-1px) rotate(2deg); }
+      100% { transform: translate(0,0) rotate(0deg); }
+    }
+    .die-card.rolling { animation: shake .12s linear infinite; }
+
+    .bottom-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 1.4rem; flex-wrap: wrap; }
+    .roll-btn { font-family: 'DM Sans', sans-serif; background: #1a1a1a; color: #fff; border: none; border-radius: 10px; padding: 13px 36px; font-size: 14px; font-weight: 500; cursor: pointer; transition: opacity .15s, transform .15s; }
+    .roll-btn:hover  { opacity: .85; }
+    .roll-btn:active { transform: scale(.97); }
+    .roll-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    .ref-btn { font-family: 'DM Sans', sans-serif; background: #fff; color: #666; border: 1px solid #ccc; border-radius: 10px; padding: 13px 16px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background .15s; display: flex; align-items: center; gap: 6px; }
+    .ref-btn:hover { background: #f0eeea; }
+    .ref-btn i { font-size: 16px; }
+
+    .prompt-banner { background: #fff; border: 1px solid #e8e6e0; border-radius: 14px; padding: 1.1rem 1.4rem; max-width: 500px; margin: 0 auto 1rem; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    .prompt-text { font-size: 14px; color: #1a1a1a; line-height: 1.65; }
+    .prompt-hint { font-size: 13px; color: #aaa; }
+    .tag-context { background: #E8F4FD; color: #1565A8; padding: 1px 7px; border-radius: 5px; font-weight: 500; }
+    .tag-time    { background: #FEF3E2; color: #A85A15; padding: 1px 7px; border-radius: 5px; font-weight: 500; }
+    .tag-result  { background: #EDF7ED; color: #1A6B1A; padding: 1px 7px; border-radius: 5px; font-weight: 500; }
+
+    .ref-panel { display: none; background: #fff; border: 1px solid #e8e6e0; border-radius: 14px; padding: 1.1rem 1.2rem; max-width: 500px; margin: 0 auto; text-align: left; }
+    .ref-panel.open { display: block; }
+    .ref-panel h3 { font-size: 13px; font-weight: 500; color: #1a1a1a; margin: 0 0 .7rem; }
+    .ref-panel .rule { font-size: 12px; color: #666; margin-bottom: .4rem; line-height: 1.5; }
+    .ref-panel .rule span { font-weight: 500; color: #1a1a1a; }
+    .ref-panel .examples { margin-top: .8rem; padding-top: .7rem; border-top: 1px solid #e8e6e0; }
+    .ref-panel .ex { font-size: 12px; color: #666; line-height: 1.6; margin-bottom: .25rem; }
+    .ref-panel .ex span { color: #1a1a1a; font-weight: 500; }
+    .ref-panel .qs { margin-top: .8rem; padding-top: .7rem; border-top: 1px solid #e8e6e0; }
+    .ref-panel .qs-label { font-size: 12px; font-weight: 500; color: #888; margin-bottom: .5rem; }
+    .ref-panel .q { font-size: 12px; background: #f5f4f0; border-radius: 8px; padding: 5px 10px; margin-bottom: .3rem; color: #1a1a1a; }
+  </style>
+</head>
+<body id="appBody">
+  <div class="app">
+    <h1 class="app-title">Wellness Dice</h1>
+    <p class="app-sub">Roll to get your speaking prompt</p>
+    <p class="lock-hint">&#128274; tap a die to lock it &nbsp;·&nbsp; &#8635; roll the rest</p>
+
+    <div class="timer-row">
+      <button class="timer-btn" onclick="setTimer(1)" id="t1">1 min</button>
+      <button class="timer-btn" onclick="setTimer(2)" id="t2">2 min</button>
+      <button class="timer-btn" onclick="setTimer(5)" id="t5">5 min</button>
+      <button class="timer-ctrl" onclick="toggleTimer()" id="tctrl" title="Start/pause"><i class="ti ti-player-play" id="ticon"></i></button>
+      <span class="timer-display" id="tdisp">—</span>
+      <button class="timer-ctrl" onclick="resetTimer()" title="Reset"><i class="ti ti-refresh"></i></button>
+    </div>
+
+    <div class="dice-grid">
+      <div class="die-card" id="card-context" onclick="toggleLock('context')">
+        <span class="die-label">Context</span>
+        <i class="ti ti-lock lock-icon"></i>
+        <div class="die-face context">
+          <div class="die-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+          <div class="die-illustration" id="illus-context"></div>
+          <span class="die-face-text" id="text-context"></span>
+        </div>
+        <span class="die-category" id="cat-context"></span>
+        <span class="locked-label">Locked</span>
+      </div>
+
+      <div class="die-card" id="card-time" onclick="toggleLock('time')">
+        <span class="die-label">Time</span>
+        <i class="ti ti-lock lock-icon"></i>
+        <div class="die-face time">
+          <div class="die-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+          <span class="die-face-text" id="text-time"></span>
+        </div>
+        <span class="die-category" id="cat-time"></span>
+        <span class="locked-label">Locked</span>
+      </div>
+
+      <div class="die-card" id="card-result" onclick="toggleLock('result')">
+        <span class="die-label">Result</span>
+        <i class="ti ti-lock lock-icon"></i>
+        <div class="die-face result">
+          <div class="die-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+          <span class="die-face-text" id="text-result"></span>
+        </div>
+        <span class="die-category" id="cat-result"></span>
+        <span class="locked-label">Locked</span>
+      </div>
+    </div>
+
+    <div class="bottom-row">
+      <button class="roll-btn" id="rollBtn" onclick="rollDice()">Roll the Dice</button>
+      <button class="ref-btn" onclick="toggleRef()" id="refBtn">
+        <i class="ti ti-book"></i> Grammar help
+      </button>
+    </div>
+
+    <div class="prompt-banner" id="promptBanner">
+      <span class="prompt-hint">Press the button to generate your speaking prompt!</span>
+    </div>
+
+    <div class="ref-panel" id="refPanel">
+      <h3>Present perfect — quick reference</h3>
+      <div class="rule">Use <span>have/has + past participle</span> in your answers and questions.</div>
+      <div class="rule">Use <span>since</span> for a point in time &nbsp;·&nbsp; use <span>for</span> for a period of time</div>
+      <div class="examples">
+        <div class="ex"><span>+</span>&nbsp; I have been walking every morning since January.</div>
+        <div class="ex"><span>+</span>&nbsp; She has done yoga for a few months.</div>
+        <div class="ex"><span>–</span>&nbsp; I haven't tried it yet, but I'd like to.</div>
+        <div class="ex"><span>?</span>&nbsp; Have you noticed any changes since you started?</div>
+      </div>
+      <div class="qs">
+        <div class="qs-label">Follow-up questions</div>
+        <div class="q">How long have you been doing it?</div>
+        <div class="q">Why have you chosen this activity?</div>
+        <div class="q">Have you noticed any changes?</div>
+        <div class="q">Has anyone joined you?</div>
+        <div class="q">Would you recommend it? Why?</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const contexts = [
+      {t:'at home', icon:'ti-home'},
+      {t:'outside', icon:'ti-trees'},
+      {t:'near your house', icon:'ti-map-pin'},
+      {t:'at school or university', icon:'ti-school'},
+      {t:'with your friends', icon:'ti-friends'},
+      {t:'with your family', icon:'ti-heart'},
+      {t:'at the gym', icon:'ti-barbell'},
+      {t:'in a park', icon:'ti-leaf'},
+      {t:'online or virtually', icon:'ti-device-laptop'},
+      {t:'on your own', icon:'ti-user'},
+      {t:'on the ocean', icon:'ti-wave-sine'},
+      {t:'downtown', icon:'ti-building'},
+      {t:'in your neighborhood', icon:'ti-walk'},
+      {t:'near the sea', icon:'ti-beach'},
+      {t:'in a public space', icon:'ti-users'},
+      {t:'in your city', icon:'ti-map-2'}
+    ];
+    const times = [
+      'since last year','since January','since the pandemic','for a few weeks',
+      'for a few months','for a long time','since last month','since the beginning of the year',
+      'for almost a year','for the past few days','since the holidays','for over a year',
+      'since 2009','since I was younger','for several years','since I started this course'
+    ];
+    const results = [
+      'healthier','less stressed','happier','more energetic','more relaxed','stronger',
+      'more confident','more motivated','more focused','better about yourself',
+      'more connected to others','more productive','more balanced','more in love with exercise',
+      'better at keeping a routine',"like I've forgotten my problems"
+    ];
+
+    const locked = {context:false, time:false, result:false};
+    const current = {context:null, time:null, result:null};
+
+    function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+    function toggleLock(die){
+      if(!current[die]) return;
+      locked[die] = !locked[die];
+      document.getElementById('card-'+die).classList.toggle('locked', locked[die]);
+    }
+
+    function setIllustration(ctxObj){
+      const el = document.getElementById('illus-context');
+      el.innerHTML = `<i class="ti ${ctxObj.icon}" style="font-size:28px;color:#1565A8;opacity:.85"></i>`;
+    }
+
+    function rollDice(){
+      const btn = document.getElementById('rollBtn');
+      btn.disabled = true;
+      const dice = ['context','time','result'];
+      dice.forEach(die => {
+        if(!locked[die]){
+          const c = document.getElementById('card-'+die);
+          c.classList.remove('revealed');
+          c.classList.add('rolling');
+        }
+      });
+      document.getElementById('promptBanner').innerHTML = '<span class="prompt-hint">Rolling...</span>';
+      if(!locked.context) current.context = pick(contexts);
+      if(!locked.time)    current.time    = pick(times);
+      if(!locked.result)  current.result  = pick(results);
+
+      setTimeout(() => {
+        dice.forEach(die => {
+          if(!locked[die]){
+            document.getElementById('card-'+die).classList.remove('rolling');
+            if(die === 'context'){
+              document.getElementById('text-context').textContent = current.context.t;
+              setIllustration(current.context);
+            } else {
+              document.getElementById('text-'+die).textContent = current[die];
+            }
+            document.getElementById('cat-'+die).textContent = die.charAt(0).toUpperCase()+die.slice(1);
+          }
+        });
+        setTimeout(() => {
+          dice.forEach((die,i) => {
+            if(!locked[die]){
+              setTimeout(() => document.getElementById('card-'+die).classList.add('revealed'), i*150);
+            }
+          });
+          setTimeout(() => {
+            const ctxText = current.context ? current.context.t : '—';
+            document.getElementById('promptBanner').innerHTML =
+              `<span class="prompt-text">What activity have you done <span class="tag-context">${ctxText}</span> <span class="tag-time">${current.time||'—'}</span> that has made you feel <span class="tag-result">${current.result||'—'}</span>?</span>`;
+            btn.disabled = false;
+          }, 500);
+        }, 80);
+      }, 900);
+    }
+
+    function toggleRef(){
+      const p = document.getElementById('refPanel');
+      const b = document.getElementById('refBtn');
+      const open = p.classList.toggle('open');
+      b.querySelector('i').className = open ? 'ti ti-book-off' : 'ti ti-book';
+    }
+
+    let timerSecs=0, timerTotal=0, timerRunning=false, timerInterval=null, timerSet=false, flashInterval=null;
+
+    function setTimer(mins){
+      stopFlash();
+      clearInterval(timerInterval); timerRunning=false;
+      document.getElementById('ticon').className = 'ti ti-player-play';
+      timerTotal = mins*60; timerSecs = timerTotal; timerSet = true;
+      const d = document.getElementById('tdisp');
+      d.textContent = fmt(timerSecs);
+      d.classList.remove('urgent');
+      ['t1','t2','t5'].forEach(id => document.getElementById(id).classList.remove('active'));
+      document.getElementById('t'+mins).classList.add('active');
+    }
+
+    function toggleTimer(){
+      if(!timerSet) return;
+      if(timerRunning){
+        clearInterval(timerInterval); timerRunning=false;
+        stopFlash();
+        document.getElementById('ticon').className = 'ti ti-player-play';
+      } else {
+        if(timerSecs===0) timerSecs=timerTotal;
+        timerRunning=true;
+        document.getElementById('ticon').className = 'ti ti-player-pause';
+        timerInterval = setInterval(tick, 1000);
+      }
+    }
+
+    function tick(){
+      timerSecs--;
+      const d = document.getElementById('tdisp');
+      d.textContent = fmt(timerSecs);
+      if(timerSecs<=10 && timerSecs>0){
+        d.classList.add('urgent');
+        if(!flashInterval){
+          flashInterval = setInterval(() => {
+            document.body.classList.toggle('flashing');
+          }, 600);
+        }
+      }
+      if(timerSecs<=0){
+        clearInterval(timerInterval); timerRunning=false;
+        stopFlash();
+        d.classList.remove('urgent');
+        d.textContent = 'Time!';
+        document.getElementById('ticon').className = 'ti ti-player-play';
+        document.body.classList.add('vibrating');
+        if(navigator.vibrate) navigator.vibrate([200,100,200,100,300]);
+        setTimeout(() => document.body.classList.remove('vibrating'), 600);
+      }
+    }
+
+    function stopFlash(){
+      clearInterval(flashInterval); flashInterval=null;
+      document.body.classList.remove('flashing');
+    }
+
+    function resetTimer(){
+      clearInterval(timerInterval); timerRunning=false;
+      stopFlash();
+      document.getElementById('ticon').className = 'ti ti-player-play';
+      if(timerSet){
+        timerSecs = timerTotal;
+        const d = document.getElementById('tdisp');
+        d.textContent = fmt(timerSecs);
+        d.classList.remove('urgent');
+      }
+    }
+
+    function fmt(s){ const m=Math.floor(s/60); const sc=s%60; return m+':'+(sc<10?'0':'')+sc; }
+  </script>
+</body>
+</html>
